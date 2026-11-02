@@ -1,0 +1,22 @@
+[project]
+name = "loganalyser"
+version = "0.1.0"
+description = "Analyze Linux authentication logs"
+readme = "README.md"
+authors = [
+    { name = "linadarrogui-max", email = "l.darrogui@esisa.ac.ma" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "grip>=4.6.2",
+    "matplotlib>=3.11.2",
+    "mysql-connector-python>=9.4.0",
+]
+
+[project.scripts]
+loganalyser = "loganalyser.main:main"
+loganalyser-gui = "loganalyser.gui:main"
+
+[build-system]
+requires = ["uv_build>=0.13.3,<0.14.0"]
+build-backend = "uv_build"
