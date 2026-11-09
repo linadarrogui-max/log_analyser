@@ -7,15 +7,16 @@ from app_logging import get_logger
 logger = get_logger(__name__)
 
 
-def iter_log_rows(path):
-    """Yield each log as (filename, line number, text)."""
+def iter_log_rows(path, filenames=None):
+    """Yield selected logs as (filename, line number, text)."""
     if not os.path.isdir(path):
         error = FileNotFoundError(f"Directory not found: {path}")
         logger.error("Unable to read log directory %s: %s", path, error)
         raise error
 
     try:
-        for file in sorted(os.listdir(path)):
+        files = os.listdir(path) if filenames is None else filenames
+        for file in sorted(files):
             if file.startswith("."):
                 continue
 

@@ -9,7 +9,6 @@ import subprocess
 from pathlib import Path
 
 from app_logging import get_logger
-from process.geolocation import get_location
 
 
 logger = get_logger(__name__)
@@ -296,13 +295,13 @@ def import_country_ranges(csv_path):
         raise
 
 
-def _country_expression(ip):
-    location = get_location(ip)
+def _country_expression(ip, fallback_country):
+    address = ipaddress.ip_address(ip)
     return (
         "COALESCE((SELECT country FROM ip_country_ranges "
-        f"WHERE {_sql_literal(location['ip'])}::inet <<= network "
+        f"WHERE {_sql_literal(str(address))}::inet <<= network "
         "ORDER BY masklen(network) DESC LIMIT 1), "
-        f"{_sql_literal(location['country'])})"
+        f"{_sql_literal(fallback_country)})"
     )
 
 
@@ -325,7 +324,7 @@ def _event_insert(event):
         _sql_literal(event["status"]),
         "TRUE" if event["invalid_user"] else "FALSE",
         str(event["repeat_count"]),
-        _country_expression(event["ip"]),
+        _country_expression(event["ip"], event["country"]),
         _sql_literal(event["message"]),
         _sql_literal(event["raw_message"]),
     )

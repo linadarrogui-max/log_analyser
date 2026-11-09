@@ -6,4 +6,6 @@ __pycache__/
 logs/
 data/auth.log*
 data/ip_country.csv
+data/ip_country_cache.json
+data/ip_country_cache.tmp
 dashboard.png

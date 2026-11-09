@@ -1,12 +1,14 @@
-# Pipeline d’analyse des logs d’authentification
+# Mon projet : pipeline d’analyse des logs d’authentification
 
 ## Présentation
 
-Ce projet analyse des journaux SSH d’authentification. Le pipeline lit les
-fichiers texte et gzip, extrait les événements de connexion, les enregistre
-dans PostgreSQL et affiche un dashboard graphique avec Matplotlib.
+Dans ce projet, j’analyse des journaux SSH d’authentification pour repérer les
+connexions acceptées, les échecs et les tentatives avec un utilisateur
+invalide. Mon pipeline lit les fichiers `auth.log*` au format texte ou gzip,
+extrait les événements, les enregistre dans PostgreSQL et affiche un dashboard
+avec Matplotlib.
 
-Le dashboard présente :
+Le dashboard présente les trois indicateurs demandés :
 
 1. le nombre de connexions échouées par pays ;
 2. le nombre de connexions réussies par utilisateur ;
@@ -16,11 +18,16 @@ Les entrées syslog « message repeated N times » sont comptées comme N tentat
 Les réimportations mettent à jour l’événement d’origine au lieu de créer des
 doublons.
 
+J’ai limité les dépendances Python déclarées à Matplotlib. `re` et les autres
+modules utilisés (lecture des fichiers, gzip, réseau, PostgreSQL, journalisation)
+font partie de la bibliothèque standard de Python ; je n’utilise aucun driver
+PostgreSQL Python.
+
 ## Pipeline
 
 ```text
 data/auth.log*
-    -> ingestion/raw.py
+    -> ingestion/raw.py (uniquement les fichiers auth.log*)
     -> process/extract_transforme.py
     -> storage/postgres.py
     -> PostgreSQL
@@ -38,7 +45,8 @@ module. Elles sont ensuite relancées afin que le programme ne masque pas un
 - PostgreSQL installé et en cours d’exécution
 - Le client PostgreSQL `psql`
 - Matplotlib
-- Une base de plages IP/pays, si le dashboard doit attribuer un pays aux IP
+- Une connexion Internet pour attribuer les pays des IP publiques, ou un fichier
+  local de plages IP/pays
 
 Le projet n’utilise aucun driver Python PostgreSQL. Il communique avec
 PostgreSQL en invoquant `psql` via `subprocess`. Les autres imports utilisés
@@ -47,7 +55,7 @@ proviennent de la bibliothèque standard Python, notamment `re`, `gzip`, `csv`,
 
 ## Installation
 
-Depuis le dossier `Log_analyser` :
+Depuis le dossier du projet `Log_analyser` (celui qui contient `main.py`) :
 
 ```powershell
 python -m venv .venv
@@ -129,9 +137,24 @@ sont conservés séparément plutôt que d’inventer une date complète.
 
 ## Associer les IP aux pays
 
-Le pays n’est pas déductible des lignes SSH seules. Pour éviter d’envoyer les IP
-à un service externe, fournir une base locale dans `data/ip_country.csv`, au
-format suivant :
+Par défaut, le pipeline utilise l’API sans clé ipwho.is pour résoudre les
+adresses IP publiques. Cela envoie ces IP au service externe sur HTTPS. Les
+adresses privées ou réservées ne sont pas envoyées. Aucun jeton ni compte n’est
+nécessaire.
+La documentation de l’API est disponible sur
+[ipwho.is](https://ipwhois.io/documentation).
+
+Le service gratuit limite l’utilisation à 1 000 requêtes par jour et par
+adresse IP cliente. Le pipeline respecte un maximum local de 1 000 nouvelles
+adresses par jour, met les résultats en cache dans
+`data/ip_country_cache.json` et reprend les adresses restantes un autre jour.
+Cette limite est partagée avec les autres usages du service provenant de la
+même adresse IP publique ; elle n’est donc pas une garantie de disponibilité.
+Les échecs temporaires ne sont pas gardés dans le cache afin de pouvoir les
+réessayer ultérieurement.
+
+Pour ne pas transmettre les IP à un service externe, utiliser à la place une
+base locale autorisée dans `data/ip_country.csv` :
 
 ```csv
 network,country
@@ -139,14 +162,9 @@ network,country
 2001:db8::/32,XX
 ```
 
-Utiliser une source de géolocalisation dont la licence autorise cet usage.
-Au lancement, les plages sont importées ou mises à jour dans
-`ip_country_ranges`. Pour une IP correspondant à plusieurs plages, le réseau
-le plus précis est utilisé. Les plages inconnues sont affichées comme
-« Inconnu » ; les adresses privées ou réservées sont classées séparément.
-
-Le CSV est facultatif. Sans ce fichier, le pipeline et le dashboard fonctionnent,
-mais les IP publiques apparaissent sous « Inconnu ».
+Le fichier CSV est importé dans `ip_country_ranges` et ses plages sont utilisées
+en priorité. Les IP non résolues par l’API ou la base locale apparaissent sous
+« Inconnu ». La géolocalisation d’une IP reste approximative.
 
 ## Lancer le pipeline
 
@@ -160,7 +178,8 @@ Le programme :
 
 1. initialise le schéma PostgreSQL ;
 2. importe le CSV des pays s’il existe ;
-3. lit chaque journal texte ou gzip dans `data/` ;
+3. cherche les fichiers `data/auth.log*` (texte ou gzip) et arrête clairement
+   l’exécution si aucun journal d’entrée n’est présent ;
 4. extrait les connexions réussies et échouées ;
 5. enregistre les événements dans PostgreSQL de manière idempotente ;
 6. calcule les trois agrégations depuis PostgreSQL ;
@@ -232,6 +251,12 @@ Compiler les modules :
 
 ```powershell
 python -m compileall .
+```
+
+Exécuter les tests automatisés, sans installer de paquet de test :
+
+```powershell
+python -m unittest discover -s tests -v
 ```
 
 Contrôler PostgreSQL avec les requêtes de vérification ci-dessus après une

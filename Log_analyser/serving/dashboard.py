@@ -45,7 +45,9 @@ def render(report, output_path):
             labels = [row[label_key] for row in reversed(top_rows)]
             values = [row["attempts"] for row in reversed(top_rows)]
             if values:
-                axis.barh(labels, values, color=color)
+                bars = axis.barh(labels, values, color=color)
+                axis.bar_label(bars, fmt="%g", padding=3)
+                axis.margins(x=0.15)
             else:
                 axis.text(
                     0.5,
